@@ -785,6 +785,7 @@ class User < ActiveRecord::Base
       .limit(limit)
 
     (tl_badge + other_badges).take(limit)
+
   end
 
   def self.count_by_signup_date(start_date, end_date, group_id = nil)
@@ -1052,6 +1053,7 @@ class User < ActiveRecord::Base
     end
   end
 
+  
   def expire_tokens_if_password_changed
     # NOTE: setting raw password is the only valid way of changing a password
     # the password field in the DB is actually hashed, nobody should be amending direct
