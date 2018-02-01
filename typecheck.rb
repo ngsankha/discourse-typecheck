@@ -87,7 +87,7 @@ RDL.type EmailToken, 'self.valid_after', '() -> Hash', wrap: false
 RDL.type EmailToken, 'self.confirm', '(String) -> %bool', wrap: false
 RDL.type ActiveRecord::Base, 'self.with_deleted', '() -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
 RDL.type PostActionType, 'self.notify_flag_type_ids', '() -> Array<Integer>', wrap: false
-RDL.type PostActionType, 'self.flag_types_without_custom', '() -> Array<Integer>', wrap: false
+RDL.type PostActionType, 'self.flag_types_without_custom', '() -> Hash<Symbol, Integer>', wrap: false
 RDL.var_type User, :@raw_password, "String"
 RDL.var_type User, :@password_required, "%bool"
 
@@ -95,6 +95,7 @@ RDL.var_type User, :@password_required, "%bool"
 RDL.type ActiveRecord::AttributeMethods::ClassMethods, 'attribute_names', '() -> Array<String>', wrap: :false
 RDL.type ActiveRecord_Relation, :attribute_names, '() -> Array<String>', wrap: false
 RDL.type ActiveRecord_Relation, :active, '() -> self', wrap: false
+RDL.type Object, :present?, '() -> %bool', wrap: false
 
 
 ## checked types
@@ -118,7 +119,9 @@ RDL.type User, :update_username_lower, '() -> String', typecheck: :later, wrap: 
 #RDL.type User, :expire_tokens_if_password_changed, '() -> %bool', typecheck: :later, wrap: false 
 RDL.type Post, :seen?, '(User) -> %bool', typecheck: :later, wrap: false
 RDL.type Post, 'self.find_by_detail', '(String, String) -> Post', typecheck: :later, wrap: false
-
+RDL.type Post, :has_active_flag?, '() -> %bool', typecheck: :later, wrap: false
+RDL.type Post, :is_flagged?, '() -> %bool', typecheck: :later, wrap: false
+RDL.type Post, :is_reply_by_email?, '() -> %bool', typecheck: :later, wrap: false
 
 ## typecheck
 RDL.do_typecheck :later
