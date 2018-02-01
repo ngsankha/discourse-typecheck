@@ -87,6 +87,7 @@ RDL.type EmailToken, 'self.valid_after', '() -> Hash', wrap: false
 RDL.type EmailToken, 'self.confirm', '(String) -> %bool', wrap: false
 RDL.type ActiveRecord::Base, 'self.with_deleted', '() -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
 RDL.type PostActionType, 'self.notify_flag_type_ids', '() -> Array<Integer>', wrap: false
+RDL.type PostActionType, 'self.flag_types_without_custom', '() -> Array<Integer>', wrap: false
 RDL.var_type User, :@raw_password, "String"
 RDL.var_type User, :@password_required, "%bool"
 
@@ -115,8 +116,9 @@ RDL.type User, :create_email_token, '() -> EmailToken', typecheck: :later, wrap:
 RDL.type User, :update_username_lower, '() -> String', typecheck: :later, wrap: false
 # Need to resolve the nil < bool issue below before proceeding.
 #RDL.type User, :expire_tokens_if_password_changed, '() -> %bool', typecheck: :later, wrap: false 
+RDL.type Post, :seen?, '(User) -> %bool', typecheck: :later, wrap: false
+RDL.type Post, 'self.find_by_detail', '(String, String) -> Post', typecheck: :later, wrap: false
 
-#puts "WE GOT #{User.create.number_of_flagged_posts}"
 
 ## typecheck
 RDL.do_typecheck :later

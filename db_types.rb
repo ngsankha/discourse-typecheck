@@ -225,14 +225,14 @@ class DBType
           ## just one table joined to base table
           joined_name = param.params[1].klass.to_s.singularize.to_sym
           joined_type = RDL::Type::OptionalType.new(table_name_to_schema_type(joined_name, check_col, takes_array))
-          type_hash[joined_name.to_s.pluralize.downcase.to_sym] = joined_type ## type queries on joined tables use the joined table's plural name
+          type_hash[joined_name.to_s.pluralize.underscore.to_sym] = joined_type ## type queries on joined tables use the joined table's plural name
         when RDL::Type::UnionType
           ## multiple tables joined to base table
           joined_hash = {} ## this will be hash mapping plural table names to their type schema. will be necessary for nested hash calls                  
           param.params[1].types.each { |t|
             joined_name = t.klass.to_s.singularize.to_sym
             joined_type = table_name_to_schema_type(joined_name, check_col, takes_array)
-            joined_hash[joined_name.to_s.pluralize.downcase.to_sym] = joined_type #RDL::Type::OptionalType.new(joined_type) ## type queries on joined tables use the joined table's plural name
+            joined_hash[joined_name.to_s.pluralize.underscore.to_sym] = joined_type #RDL::Type::OptionalType.new(joined_type) ## type queries on joined tables use the joined table's plural name
           }
           joined_hash.each { |k1, v1|
             joined_hash.each { |k2, v2|
