@@ -1,7 +1,5 @@
-GIT
-  remote: https://github.com/mckaz/rdl-comp-types.git
-  revision: ca03727de7c12f18bce578595c36cbd4a52a4d6d
-  branch: comp-types
+PATH
+  remote: ../rdl-comp-types
   specs:
     rdl (2.1.0)
       parser (~> 2.3, >= 2.3.1.4)

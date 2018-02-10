@@ -25,7 +25,7 @@ else
   gem 'seed-fu'
 end
 
-gem 'rdl', git: 'https://github.com/mckaz/rdl-comp-types.git', branch: 'comp-types'
+gem 'rdl', path: '../rdl-comp-types'
 
 gem 'mail'
 gem 'mime-types', require: 'mime/types/columnar'
