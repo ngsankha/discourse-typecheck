@@ -66,6 +66,9 @@ module ActiveRecord::Querying
   type :exists?, '(``DBType.exists_input_type(trec, targs)``) -> %bool', wrap: false
 
   type :where, '(``DBType.where_input_type(trec, targs)``) -> ``DBType.where_output_type(trec, targs)``', wrap: false
+  # TODO: AST needs to be semantically correct in the strings case
+  type :where, '(String, Hash) -> ``DBType.where_output_type(trec, targs)``', wrap: false
+  type :where, '(String, *String) -> ``DBType.where_output_type(trec, targs)``', wrap: false
   type :where, '() -> ``DBType.where_output_type(trec, targs)``', wrap: false
 
   type :joins, '(``DBType.joins_one_input_type(trec, targs)``) -> ``DBType.joins_output(trec, targs)``', wrap: false
@@ -77,10 +80,14 @@ module ActiveRecord::Querying
   type :order, '(String) -> ``DBType.order_output_type(trec, targs)``', wrap: false
   type :includes, '(``DBType.joins_one_input_type(trec, targs)``) -> ``DBType.joins_output(trec, targs)``', wrap: false
   type :includes, '(``DBType.joins_multi_input_type(trec, targs)``, Symbol or Hash, *Symbol or Hash) -> ``DBType.joins_output(trec, targs)``', wrap: false
-  # type :limit, '(Integer) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
+  type :limit, '(Integer) -> ``DBType.limit_output_type(trec, targs)``', wrap: false
   type :count, '() -> Integer', wrap: false
   type :count, '(``DBType.count_input(trec, targs)``) -> Integer', wrap: false
   type :destroy_all, '() -> ``DBType.rec_to_array(trec)``', wrap: false
+
+  type :+, '(%any) -> ``DBType.plus_output_type(trec, targs)``', wrap: false
+
+  type :not, '(``DBType.not_input_type(trec, targs)``) -> ``DBType.not_output_type(trec, targs)``', wrap: false
 
 end
 
@@ -180,13 +187,27 @@ class DBType
   def self.rec_to_schema_type(trec, check_col, takes_array=false)
     case trec
     when RDL::Type::GenericType
-      raise "Shouldn't get GenericType"
+      # TODO: fix this, see `model.reflect_on_all_associations` in typecheck.rb
+      # raise "Shouldn't get GenericType"
+      raise "Unexpected type #{trec}." unless (trec.base.klass == ActiveRecord_Relation) || (trec.base.klass == ActiveRecord::QueryMethods::WhereChain)
+      param = trec.params[0]
+      case param
+      when RDL::Type::NominalType
+        tname = param.klass.to_s.to_sym
+        return table_name_to_schema_type(tname, check_col, takes_array)
+      else
+        raise RDL::Typecheck::StaticTypeError, "Unexpected type parameter in  #{trec}."
+      end
     when RDL::Type::SingletonType
       raise RDL::Typecheck::StaticTypeError, "Unexpected receiver type #{trec}." unless trec.val.is_a?(Class)
       tname = trec.val.to_s.to_sym
       return table_name_to_schema_type(tname, check_col, takes_array)
     when RDL::Type::NominalType
       tname = trec.name.to_sym
+      return table_name_to_schema_type(tname, check_col, takes_array)
+    when RDL::Type::AstNode
+      raise RDL::Typecheck::StaticTypeError, "Unexpected receiver type #{trec}." unless trec.op == :SELECT
+      tname = trec.val.to_sym
       return table_name_to_schema_type(tname, check_col, takes_array)
     else
       raise RDL::Typecheck::StaticTypeError, "Unexpected receiver type #{trec}."
@@ -223,7 +244,21 @@ class DBType
   end
 
   def self.where_output_type(trec, targs)
+    puts trec, targs
     case trec
+    when RDL::Type::GenericType
+      # TODO: remove this; shouldn't be there after model.reflect_on_all_associations in typecheck.rb
+      raise "Unexpected type #{trec}." unless trec.base.klass == ActiveRecord_Relation
+      select_node = RDL::Type::AstNode.new(:SELECT, trec.params[0])
+      unless targs.size == 0
+        cond_node = RDL::Type::AstNode.new(:COND, targs)
+        and_node = RDL::Type::AstNode.new(:AND, nil)
+        where_node = RDL::Type::AstNode.new(:WHERE, nil)
+        and_node.insert cond_node
+        where_node.insert and_node
+        select_node.insert where_node
+      end
+      return select_node
     when RDL::Type::SingletonType
       select_node = RDL::Type::AstNode.new(:SELECT, trec)
       unless targs.size == 0
@@ -309,12 +344,29 @@ class DBType
 
   def self.joins_one_input_type(trec, targs)
     return RDL::Globals.types[:top] unless targs.size == 1 ## trivial case, won't be matched
+    case trec
+    when RDL::Type::SingletonType
+      base_klass = trec.val
+    when RDL::Type::AstNode
+      raise "Unexpected type #{trec}" unless trec.op == :SELECT
+      base_klass = trec.val.klass
+    else
+      raise "unexpected receiver type #{trec}"
+    end
     case targs[0]
     when RDL::Type::SingletonType
       sym = targs[0].val
       raise RDL::Typecheck::StaticTypeError, "Unexpected arg type #{trec} in call to joins." unless sym.is_a?(Symbol)
-      rec_klass = trec.val ## this method should only be called when trec is a class singleton
-      raise RDL::Typecheck::StaticTypeError, "#{trec} has no association to #{targs[0]}, cannot perform joins." unless associated_with?(rec_klass, sym)
+      raise RDL::Typecheck::StaticTypeError, "#{trec} has no association to #{targs[0]}, cannot perform joins." unless associated_with?(base_klass, sym)
+      return targs[0]
+    when RDL::Type::FiniteHashType
+      targs[0].elts.each { |key, val|
+        raise RDL::Typecheck::StaticTypeError, "Unexpected hash arg type #{targs[0]} in call to joins." unless key.is_a?(Symbol) && val.is_a?(RDL::Type::SingletonType) && val.val.is_a?(Symbol)
+        val_sym = val.val
+        raise RDL::Typecheck::StaticTypeError, "#{trec} has no association to #{key}, cannot perform joins." unless associated_with?(base_klass, key)
+        key_klass = key.to_s.singularize.camelize
+        raise RDL::Typecheck::StaticTypeError, "#{key} has no association to #{val_sym}, cannot perform joins." unless associated_with?(key_klass, val_sym)
+      }
       return targs[0]
     else
       raise RDL::Typecheck::StaticTypeError, "Unexpected arg type #{targs[0]} in call to joins."
@@ -347,16 +399,7 @@ class DBType
   def self.joins_multi_input_type(trec, targs)
     return RDL::Globals.types[:top] unless targs.size > 1 ## trivial case, won't be matched
     targs.each { |arg|
-      puts arg.class
-      case arg
-      when RDL::Type::SingletonType
-        sym = arg.val
-        raise RDL::Typecheck::StaticTypeError, "Unexpected arg type #{trec} in call to joins." unless sym.is_a?(Symbol)
-        rec_klass = trec.val ## this method should only be called when trec is a class singleton
-        raise RDL::Typecheck::StaticTypeError, "#{trec} has no association to #{arg}, cannot perform joins." unless associated_with?(rec_klass, sym)
-      else
-        raise RDL::Typecheck::StaticTypeError, "Unexpected arg type #{targs[0]} in call to joins."
-      end
+      joins_one_input_type(trec, [arg])
     }
     return targs[0] ## since this method is called as first argument in type
   end
@@ -479,5 +522,47 @@ class DBType
     else
       raise "unexpected type #{trec}"
     end
+  end
+
+  def self.limit_output_type(trec, targs)
+    case trec
+    when RDL::Type::AstNode
+      raise RDL::Typecheck::StaticTypeError, "Expected a SELECT node" unless trec.op == :SELECT
+      limi_node = RDL::Type::AstNode.new(:LIMIT, targs[0])
+      trec.insert limi_node
+      return trec
+    else
+      raise "unexpected type #{trec}"
+    end
+  end
+
+  def self.plus_output_type(trec, targs)
+    typs = []
+    [trec, targs[0]].each { |t|
+      case t
+      when RDL::Type::AstNode
+        raise "Expected SELECT node." unless t.op == :SELECT
+        typs << t.val
+      else
+        raise "unexpected type #{t}"
+      end
+    }
+    RDL::Type::GenericType.new(RDL::Type::NominalType.new(Array), RDL::Type::UnionType.new(*typs))
+  end
+
+  def self.count_input(trec, targs)
+    hash_type = rec_to_schema_type(trec, targs).elts
+    typs = []
+    hash_type.each { |k, v|
+      if v.is_a?(RDL::Type::FiniteHashType)
+        ## will reach this with joined tables, but we're only interested in column names
+        v.elts.each { |k1, v1|
+          typs << RDL::Type::SingletonType.new(k1) unless v1.is_a?(RDL::Type::FiniteHashType) ## potentially two dimensions in joined table
+        }
+      else
+        typs << RDL::Type::SingletonType.new(k)
+      end
+    }
+    return RDL::Type::UnionType.new(*typs)
   end
 end
