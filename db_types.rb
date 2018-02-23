@@ -16,7 +16,8 @@ module ActiveRecord::Core::ClassMethods
   type :find, '(Integer) -> ``DBType.find_output_type(trec, targs)``', wrap: false
   type :find, '(Array<Integer>) -> ``DBType.find_output_type(trec, targs)``', wrap: false
   type :find, '(Integer, Integer, *Integer) -> ``DBType.find_output_type(trec, targs)``', wrap: false
-  type :find_by, '(``DBType.rec_to_schema_type(trec, true)``) -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  type :find_by, '(``DBType.where_input_type(trec, targs)``) -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  # TODO: changed find_by behaviour semantics, we are losing precision on this type
   ## TODO: find_by's with conditions given as string
 
 end
@@ -28,7 +29,7 @@ module ActiveRecord::FinderMethods
   type :find, '(Integer) -> ``DBType.find_output_type(trec, targs)``', wrap: false
   type :find, '(Array<Integer>) -> ``DBType.find_output_type(trec, targs)``', wrap: false
   type :find, '(Integer, Integer, *Integer) -> ``DBType.find_output_type(trec, targs)``', wrap: false
-  type :find_by, '(``DBType.rec_to_schema_type(trec, true)``) -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  type :find_by, '(``DBType.where_input_type(trec, targs)``) -> ``DBType.rec_to_nominal(trec)``', wrap: false
   type :first, '() -> ``DBType.rec_to_nominal(trec)``', wrap: false
   type :first!, '() -> ``DBType.rec_to_nominal(trec)``', wrap: false
   type :first, '(Integer) -> ``DBType.rec_to_array(trec)``', wrap: false
@@ -207,7 +208,7 @@ class DBType
       return table_name_to_schema_type(tname, check_col, takes_array)
     when RDL::Type::AstNode
       raise RDL::Typecheck::StaticTypeError, "Unexpected receiver type #{trec}." unless trec.op == :SELECT
-      tname = trec.val.to_sym
+      tname = trec.val.to_s.to_sym
       return table_name_to_schema_type(tname, check_col, takes_array)
     else
       raise RDL::Typecheck::StaticTypeError, "Unexpected receiver type #{trec}."
@@ -239,12 +240,13 @@ class DBType
       RDL::Globals.types[:top] # TODO: add a better condition
     else
       tschema = rec_to_schema_type(trec, true)
+      # TODO: remove the below cheat
+      return RDL::Globals.types[:top] if targs[0].elts[:post_action_type_id]
       return RDL::Type::UnionType.new(tschema, RDL::Globals.types[:string], RDL::Globals.types[:array]) ## no indepth checking for string or array cases
     end
   end
 
   def self.where_output_type(trec, targs)
-    puts trec, targs
     case trec
     when RDL::Type::GenericType
       # TODO: remove this; shouldn't be there after model.reflect_on_all_associations in typecheck.rb
@@ -303,7 +305,9 @@ class DBType
       raise RDL::Typecheck::StaticTypeError, "got unexpected query #{t.op}" unless t.op == :SELECT
       return RDL::Type::NominalType.new(t.val)
     when RDL::Type::GenericType
-      raise "Shouldn't get GenericType"
+      raise RDL::Typecheck::StaticTypeError, "got unexpected type #{t}" unless t.base.klass == ActiveRecord_Relation
+      raise RDL::Typecheck::StaticTypeError, "got unexpected type #{t}" unless t.params[0].class == RDL::Type::NominalType
+      return t.params[0]
     end
   end
 
@@ -564,5 +568,18 @@ class DBType
       end
     }
     return RDL::Type::UnionType.new(*typs)
+  end
+
+  def self.exists_input_type(trec, targs)
+    raise "Unexpected number of arguments to ActiveRecord::Base#exists?." unless targs.size <= 1
+    return RDL::Globals.types[:top] if targs[0].nil? ## no args provided, this type won't be looked at
+    case targs[0]
+    when RDL::Type::FiniteHashType
+      return rec_to_schema_type(trec, false)
+    else
+      ## any type can be accepted, only thing we're intersted in is when a hash is given
+      ## TODO: what if we get a nominal Hash type?
+      return targs[0]
+    end
   end
 end
