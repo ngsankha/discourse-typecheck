@@ -532,8 +532,13 @@ class DBType
     case trec
     when RDL::Type::AstNode
       raise RDL::Typecheck::StaticTypeError, "Expected a SELECT node" unless trec.op == :SELECT
-      limi_node = RDL::Type::AstNode.new(:LIMIT, targs[0])
-      trec.insert limi_node
+      limit_node = trec.find_one :LIMIT
+      if limit_node
+        limit_node.val = targs[0]
+      else
+        limit_node = RDL::Type::AstNode.new(:LIMIT, targs[0])
+      end
+      trec.insert limit_node
       return trec
     else
       raise "unexpected type #{trec}"
