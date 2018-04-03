@@ -5,9 +5,49 @@ class ActiveRecord::Base
   
   type :initialize, '(``DBType.rec_to_schema_type(trec, true)``) -> self', wrap: false
   type 'self.create', '(``DBType.rec_to_schema_type(trec, true)``) -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  type 'self.create!', '(``DBType.rec_to_schema_type(trec, true)``) -> ``DBType.rec_to_nominal(trec)``', wrap: false
   type :initialize, '() -> self', wrap: false
   type 'self.create', '() -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  type 'self.create!', '() -> ``DBType.rec_to_nominal(trec)``', wrap: false
+
+  type :update_column, '(``uc_first_arg(trec)``, ``uc_second_arg(trec, targs)``) -> %bool', wrap: false
+
+  def self.uc_first_arg(trec)
+    case trec
+    when RDL::Type::NominalType
+      tname = trec.name.to_sym
+      tschema = RDL::Globals.db_schema[tname].params[0].elts
+      raise "Schema not found." unless tschema
+      typs = []
+      tschema.each_key { |k|
+        raise "Expected symbol." unless k.is_a?(Symbol)
+        typs << RDL::Type::SingletonType.new(k) unless k == :__associations
+      }
+      return RDL::Type::UnionType.new(*typs)
+    else
+      raise "unexpected type"
+    end
+  end
+
+  def self.uc_second_arg(trec, targs)
+    case trec
+    when RDL::Type::NominalType
+      tname = trec.name.to_sym
+      tschema = RDL::Globals.db_schema[tname].params[0].elts
+      raise "Schema not found." unless tschema
+      raise "Unexpected first arg type." unless targs[0].is_a?(RDL::Type::SingletonType) && targs[0].val.is_a?(Symbol)
+      return tschema[targs[0].val]
+    else
+      raise "unexpected type"
+    end    
+  end
   
+end
+
+module ActiveRecord::Suppressor
+  extend RDL::Annotate
+
+  type :save!, '() -> %bool', wrap: false
 end
 module ActiveRecord::Core::ClassMethods
   extend RDL::Annotate
@@ -66,8 +106,8 @@ module ActiveRecord::Querying
   type :exists?, '(``DBType.exists_input_type(trec, targs)``) -> %bool', wrap: false
 
   type :where, '(``DBType.where_input_type(trec, targs)``) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
-  type :where, '(String, Hash) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
-  type :where, '(String, *String) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
+  type :where, '(String, *%any) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
+  #type :where, '(String, *String) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
   type :where, '() -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord::QueryMethods::WhereChain), DBType.rec_to_nominal(trec))``', wrap: false
 
 
@@ -82,8 +122,10 @@ module ActiveRecord::Querying
   type :limit, '(Integer) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false 
   type :count, '() -> Integer', wrap: false
   type :count, '(``DBType.count_input(trec, targs)``) -> Integer', wrap: false
+  type :sum, '(``DBType.count_input(trec, targs)``) -> Integer', wrap: false
   type :destroy_all, '() -> ``DBType.rec_to_array(trec)``', wrap: false
-
+  type :delete_all, '() -> Integer', wrap: false
+  type :references, '(Symbol, *Symbol) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
 end
 
 module ActiveRecord::QueryMethods
@@ -91,8 +133,8 @@ module ActiveRecord::QueryMethods
   ## Types from this module are used when receiver is ActiveRecord_relation
 
   type :where, '(``DBType.where_input_type(trec, targs)``) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
-  type :where, '(String, Hash) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
-  type :where, '(String, *String) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
+  type :where, '(String, *%any) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
+  #type :where, '(String, *String) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
   type :where, '() -> ``DBType.where_noarg_output_type(trec)``', wrap: false
 
   type :joins, '(``DBType.joins_one_input_type(trec, targs)``) -> ``DBType.joins_output(trec, targs)``', wrap: false
@@ -105,7 +147,7 @@ module ActiveRecord::QueryMethods
   type :includes, '(``DBType.joins_multi_input_type(trec, targs)``, Symbol or Hash, *Symbol or Hash) -> ``DBType.joins_output(trec, targs)``', wrap: false
   #type :includes, '(*Symbol or Hash) -> %any', wrap: false
   type :limit, '(Integer) -> ``trec``', wrap: false
-
+  type :references, '(Symbol, *Symbol) -> self', wrap: false
 end
 
 
@@ -150,6 +192,7 @@ module ActiveRecord::Calculations
   extend RDL::Annotate
   type :count, '() -> Integer', wrap: false
   type :count, '(``DBType.count_input(trec, targs)``) -> Integer', wrap: false
+  type :sum, '(``DBType.count_input(trec, targs)``) -> Integer', wrap: false
 end
 
 class ActiveRecord_Relation
@@ -170,7 +213,15 @@ class ActiveRecord_Relation
   type :present?, '() -> %bool', wrap: false
   type :create, '(``DBType.rec_to_schema_type(trec, true)``) -> ``DBType.rec_to_nominal(trec)``', wrap: false
   type :create, '() -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  type :create!, '(``DBType.rec_to_schema_type(trec, true)``) -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  type :create!, '() -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  type :new, '(``DBType.rec_to_schema_type(trec, true)``) -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  type :new, '() -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  type :build, '(``DBType.rec_to_schema_type(trec, true)``) -> ``DBType.rec_to_nominal(trec)``', wrap: false
+  type :build, '() -> ``DBType.rec_to_nominal(trec)``', wrap: false
   type :destroy_all, '() -> ``DBType.rec_to_array(trec)``', wrap: false
+  type :delete_all, '() -> Integer', wrap: false
+  type :map, '() { (t) -> u } -> Array<u>'
 end
 
 

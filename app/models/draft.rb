@@ -33,9 +33,9 @@ class Draft < ActiveRecord::Base
 
   def self.find_draft(user, key)
     if user.is_a?(User)
-      find_by(user_id: user.id, draft_key: key)
+      find_by(user_id: RDL.type_cast(user, 'User', force: true).id, draft_key: key)
     else
-      find_by(user_id: user, draft_key: key)
+      find_by(user_id: RDL.type_cast(user, 'Integer', force: true), draft_key: key)
     end
   end
 
