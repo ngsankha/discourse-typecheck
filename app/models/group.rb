@@ -186,7 +186,7 @@ class Group < ActiveRecord::Base
   end
 
   def posts_for(guardian, opts = nil)
-    opts ||= {}
+    opts ||= RDL.type_cast({}, "Hash<Symbol, Integer>", force: true)
     user_ids = group_users.map { |gu| gu.user_id }
     result = Post.includes(:user, :topic, topic: :category)
       .references(:posts, :topics, :category)
@@ -204,7 +204,7 @@ class Group < ActiveRecord::Base
   end
 
   def messages_for(guardian, opts = nil)
-    opts ||= {}
+    opts ||= RDL.type_cast({}, "Hash<Symbol, Integer>", force: true)
 
     result = Post.includes(:user, :topic, topic: :category)
       .references(:posts, :topics, :category)
@@ -222,7 +222,7 @@ class Group < ActiveRecord::Base
   end
 
   def mentioned_posts_for(guardian, opts = nil)
-    opts ||= {}
+    opts ||= RDL.type_cast({}, "Hash<Symbol, Integer>", force: true)
     result = Post.joins(:group_mentions)
       .includes(:user, :topic, topic: :category)
       .references(:posts, :topics, :category)
@@ -244,14 +244,14 @@ class Group < ActiveRecord::Base
   end
 
   def self.refresh_automatic_group!(name)
-    return unless id = AUTO_GROUPS[name]
+    return unless id = RDL.type_cast(AUTO_GROUPS[name], "Integer", force: true)
 
     unless group = self.lookup_group(name)
       group = Group.new(name: name.to_s, automatic: true)
 
-      if AUTO_GROUPS[:moderators] == id
+      if RDL.type_cast(AUTO_GROUPS[:moderators], "Integer", force: true) == id
         group.default_notification_level = 2
-        group.messageable_level = ALIAS_LEVELS[:everyone]
+        group.messageable_level = RDL.type_cast(ALIAS_LEVELS[:everyone], "Integer", force: true)
       end
 
       group.id = id
@@ -274,7 +274,7 @@ class Group < ActiveRecord::Base
       group.save!
       return group
     when :moderators
-      group.update!(messageable_level: ALIAS_LEVELS[:everyone])
+      group.update!(messageable_level: RDL.type_cast(ALIAS_LEVELS[:everyone], "Integer", force: true))
     end
 
     # Remove people from groups they don't belong in.
@@ -384,10 +384,10 @@ class Group < ActiveRecord::Base
   end
 
   def self.lookup_group(name)
-    if id = AUTO_GROUPS[name]
+    if id = RDL.type_cast(AUTO_GROUPS[name], "Integer", force: true)
       Group.find_by(id: id)
     else
-      unless group = Group.find_by(name: name)
+      unless group = Group.find_by(name: RDL.type_cast(name, "String", force: true))
         raise ArgumentError, "unknown group"
       end
       group
@@ -411,7 +411,7 @@ class Group < ActiveRecord::Base
 
   def self.desired_trust_level_groups(trust_level)
     trust_group_ids.keep_if do |id|
-      id == AUTO_GROUPS[:trust_level_0] || (trust_level + 10) >= id
+      id == RDL.type_cast(AUTO_GROUPS[:trust_level_0], "Integer", force: true) || (trust_level + 10) >= id
     end
   end
 
@@ -427,12 +427,12 @@ class Group < ActiveRecord::Base
           group.group_users.create!(user_id: user_id)
         end
       else
-        name = AUTO_GROUP_IDS[trust_level]
+        name = RDL.type_cast(AUTO_GROUP_IDS[trust_level], "Symbol", force: true)
         refresh_automatic_group!(name)
       end
     end
   end
-
+  
   def self.builtin
     Enum.new(:moderators, :admins, :trust_level_1, :trust_level_2)
   end
