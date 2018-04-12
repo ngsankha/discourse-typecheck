@@ -302,9 +302,10 @@ class DBType
     when RDL::Type::AstNode
       RDL::Globals.types[:top] # TODO: add a better condition
     else
-      tschema = rec_to_schema_type(trec, true)
+      tschema = rec_to_schema_type(trec, true, true)
       # TODO: remove the below cheat
-      return RDL::Globals.types[:top] if targs[0].elts[:post_action_type_id]
+      return RDL::Globals.types[:top] #if targs[0].elts[:post_action_type_id]
+      # puts tschema
       return RDL::Type::UnionType.new(tschema, RDL::Globals.types[:string], RDL::Globals.types[:array]) ## no indepth checking for string or array cases
     end
   end
@@ -416,7 +417,13 @@ class DBType
       base_klass = trec.val
     when RDL::Type::AstNode
       raise "Unexpected type #{trec}" unless trec.op == :SELECT
-      base_klass = trec.val.klass
+      if trec.val.is_a? RDL::Type::SingletonType
+        base_klass = trec.val.val
+      elsif trec.val.is_a? RDL::Type::NominalType
+        base_klass = trec.val.klass
+      else
+        raise "unexpected base type #{trec}"
+      end
     else
       raise "unexpected receiver type #{trec}"
     end
