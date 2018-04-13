@@ -1,7 +1,5 @@
 NESTED_JOINS = false
 
-#### get rid of static errors
-
 class ActiveRecord::Base
   extend RDL::Annotate
 
@@ -147,47 +145,7 @@ module ActiveRecord::QueryMethods
 
   type :group, '(Symbol) -> ``DBType.group_output_type(trec, targs)``', wrap: false
   type :group, '(Symbol, *Symbol) -> ``DBType.group_output_type(trec, targs)``', wrap: false
-  # type :select, '(Symbol or String or Array<String>, *Symbol or String or Array<String>) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
-  # type :order, '(String) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
-  # type :includes, '(``DBType.joins_one_input_type(trec, targs)``) -> ``DBType.joins_output(trec, targs)``', wrap: false
-  # type :includes, '(``DBType.joins_multi_input_type(trec, targs)``, Symbol or Hash, *Symbol or Hash) -> ``DBType.joins_output(trec, targs)``', wrap: false
-  # #type :includes, '(*Symbol or Hash) -> %any', wrap: false
-  # type :limit, '(Integer) -> ``trec``', wrap: false
-  # type :references, '(Symbol, *Symbol) -> self', wrap: false
 end
-
-
-# class ActiveRecord::QueryMethods::WhereChain
-#   extend RDL::Annotate
-#   type_params [:t], :dummy
-
-#   type :not, '(``DBType.not_input_type(trec, targs)``) -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), trec.params[0])``', wrap: false
-
-# end
-
-# module ActiveRecord::Delegation
-#   extend RDL::Annotate
-
-#   type :+, '(%any) -> ``DBType.plus_output_type(trec, targs)``', wrap: false
-
-# end
-
-# class JoinTable
-#   extend RDL::Annotate
-#   type_params [:orig, :joined], :dummy
-#   ## type param :orig will be nominal type of base table in join
-#   ## type param :joined will be a union type of all joined tables, or just a nominal type if there's only one
-
-#   ## this class is meant to only be the type parameter of ActiveRecord_Relation or WhereChain, expressing multiple joined tables instead of just a single table
-# end
-
-
-
-# module ActiveRecord::Scoping::Named::ClassMethods
-#   extend RDL::Annotate
-#   type :all, '() -> ``RDL::Type::GenericType.new(RDL::Type::NominalType.new(ActiveRecord_Relation), DBType.rec_to_nominal(trec))``', wrap: false
-
-# end
 
 module ActiveRecord::Persistence
   extend RDL::Annotate
